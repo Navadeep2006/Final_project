@@ -8,10 +8,7 @@ env.bak/
 venv.bak/
 
 # Data and Models
-backend/model/sentiment_model.pkl
-backend/model/tfidf_vectorizer.pkl
 backend/model/data.csv
-*.pkl
 *.csv
 
 # Cache and Compiled Python
