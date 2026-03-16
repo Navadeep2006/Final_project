@@ -3,4 +3,5 @@ numpy
 scikit-learn
 nltk
 plotly
+altair<5
 streamlit
