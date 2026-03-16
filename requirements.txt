@@ -4,5 +4,4 @@ scikit-learn
 nltk
 plotly
 altair<5
-imghdr
-streamlit
+streamlit>=1.38.0
