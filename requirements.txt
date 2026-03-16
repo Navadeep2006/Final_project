@@ -4,4 +4,5 @@ scikit-learn
 nltk
 plotly
 altair<5
+imghdr
 streamlit
