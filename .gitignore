@@ -1,0 +1,20 @@
+# Python Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Data and Models
+backend/model/sentiment_model.pkl
+backend/model/tfidf_vectorizer.pkl
+backend/model/data.csv
+*.pkl
+*.csv
+
+# Cache and Compiled Python
+__pycache__/
+*.py[cod]
+*$py.class
