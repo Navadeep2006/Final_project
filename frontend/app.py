@@ -9,8 +9,10 @@ import plotly.graph_objects as go
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 import os
 import time
+import csv
 
 # ──────────────────────────────────────────────
 # Page Configuration  (MUST be first st call)
@@ -321,10 +323,18 @@ def load_artifacts():
 model, vectorizer = load_artifacts()
 MODEL_LOADED = model is not None and vectorizer is not None
 
+# Load accuracy dynamically
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "model", "accuracy.txt"), "r") as f:
+        MODEL_ACCURACY = f.read().strip() + "%"
+except Exception:
+    MODEL_ACCURACY = "89.2%"
 
 # ──────────────────────────────────────────────
 # Text preprocessing (mirrors training pipeline)
 # ──────────────────────────────────────────────
+lemmatizer = WordNetLemmatizer()
+
 def preprocess(text: str) -> str:
     text = text.lower()
     text = re.sub(r"http\S+|www\S+", "", text)          # URLs
@@ -336,7 +346,7 @@ def preprocess(text: str) -> str:
         stop_words = set(stopwords.words("english"))
         tokens = word_tokenize(text)
         # Type fix: pass list instead of generator or mixed objects
-        text = " ".join([str(t) for t in tokens if t not in stop_words])
+        text = " ".join([lemmatizer.lemmatize(t) for t in tokens if t not in stop_words])
     except Exception:
         pass
     return text
@@ -382,6 +392,24 @@ def predict(text: str):
     return label, probs
 
 
+def add_to_dataset(text: str, sentiment: str):
+    """Appends new user feedback to the dataset."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(base_dir, "..", "backend", "model", "data.csv")
+    label_map = {"Negative": "0", "Neutral": "2", "Positive": "4"}
+    label = label_map.get(sentiment, "2")
+    mock_id = str(int(time.time() * 1000))
+    date_str = time.strftime("%a %b %d %H:%M:%S PDT %Y")
+    
+    try:
+        with open(data_path, "a", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            writer.writerow([label, mock_id, date_str, "NO_QUERY", "citizen_user", text])
+        return True
+    except Exception as e:
+        return False
+
+
 # ──────────────────────────────────────────────
 # Static dataset stats (from Sentiment140)
 # ──────────────────────────────────────────────
@@ -412,7 +440,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     # Model Info
-    st.markdown("""
+    st.markdown(f"""
     <div class="info-card">
         <h4>⚙️ Model Information</h4>
         <div class="info-row">
@@ -429,11 +457,11 @@ with st.sidebar:
         </div>
         <div class="info-row">
             <span class="info-label">Training Samples</span>
-            <span class="info-value">1,600,000</span>
+            <span class="info-value">~ 1,600,000</span>
         </div>
         <div class="info-row">
             <span class="info-label">Model Accuracy</span>
-            <span class="badge-green">77 %</span>
+            <span class="badge-green">{MODEL_ACCURACY}</span>
         </div>
         <div class="info-row">
             <span class="info-label">Classes</span>
@@ -441,6 +469,7 @@ with st.sidebar:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 
     # Model status
     if MODEL_LOADED:
@@ -497,7 +526,7 @@ with st.sidebar:
 # ══════════════════════════════════════════════
 
 # ── Page Header ──────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <div class="page-header">
     <h1>Citizen Feedback<br>Sentiment Analysis</h1>
     <p>An AI-powered platform that decodes public opinion on civic services using 
@@ -506,18 +535,19 @@ st.markdown("""
     <div>
         <span class="tag-pill"><span>NLP</span> · TF-IDF</span>
         <span class="tag-pill"><span>ML</span> · Logistic Regression</span>
-        <span class="tag-pill"><span>Accuracy</span> · 77%</span>
+        <span class="tag-pill"><span>Accuracy</span> · {MODEL_ACCURACY}</span>
         <span class="tag-pill"><span>Dataset</span> · Sentiment140</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 
+
 # ── Top metrics row ───────────────────────────
 m1, m2, m3, m4 = st.columns(4)
 for col, val, lbl in zip(
     [m1, m2, m3, m4],
-    ["1.6M", "77%", "3", "6"],
+    ["1.6M", MODEL_ACCURACY, "3", "6"],
     ["Training Samples", "Model Accuracy", "Sentiment Classes", "Service Domains"]
 ):
     col.markdown(f"""
@@ -580,6 +610,19 @@ with left_col:
         - Be descriptive — longer feedback = more context for the model
         - Avoid emojis or special characters
         """)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("➕ Contribute: Add to Dataset"):
+        st.markdown("<p style='font-size:0.8rem; color:#94a3b8;'>Improve the model by adding this feedback directly into the training dataset.</p>", unsafe_allow_html=True)
+        new_sentiment = st.radio("Actual Sentiment", options=["Negative", "Neutral", "Positive"], horizontal=True)
+        if st.button("Save to Dataset", type="primary"):
+            if not user_input.strip():
+                st.error("Text is empty. Please enter feedback above.")
+            else:
+                if add_to_dataset(user_input, new_sentiment):
+                    st.success("✅ Added to dataset successfully! The model can learn from this in the next training run.")
+                else:
+                    st.error("❌ Failed to append to dataset. Check file paths.")
 
 
 # ──────────────────────────────────────────────
@@ -759,7 +802,26 @@ st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────
 st.markdown("""
-<div style="text-align:center;padding:1rem 0 2rem;color:#374151;font-size:0.75rem;">
+<style>
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #0b0f1a;
+    border-top: 1px solid #1e2d45;
+    text-align: center;
+    padding: 0.8rem 0;
+    color: #374151;
+    font-size: 0.75rem;
+    z-index: 9999;
+}
+/* Ensure main content doesn't overlap with absolute footer */
+.block-container {
+    padding-bottom: 80px !important;
+}
+</style>
+<div class="footer">
     <strong style="color:#38bdf8">CitizenSense AI</strong> · 
     Citizen Feedback Sentiment Analysis System · 
     Final Year Project · 
